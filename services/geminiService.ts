@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 
 export const fileToBase64 = (file: File): Promise<string> => {
@@ -17,11 +16,7 @@ export const fileToBase64 = (file: File): Promise<string> => {
 
 export const generateClothingTags = async (base64Image: string, mimeType: string): Promise<{ category: string; color: string; style_tags: string[]; estimatedPrice: number; }> => {
     try {
-        const apiKey = typeof process !== 'undefined' && process.env ? process.env.API_KEY : undefined;
-        if (!apiKey) {
-            throw new Error("Gemini API 金鑰 (process.env.API_KEY) 未設定。AI 功能無法使用。");
-        }
-        const ai = new GoogleGenAI({ apiKey });
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
         const imagePart = {
             inlineData: {
