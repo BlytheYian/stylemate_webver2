@@ -26,7 +26,7 @@ export const generateClothingTags = async (base64Image: string, mimeType: string
         };
 
         const textPart = {
-            text: "您是一位時尚專家AI。請分析這張衣物圖片。識別它的類別（例如：T恤、牛仔褲、連身裙、外套），主要顏色，並提供3-5個相關的風格標籤（例如：Y2K、Gorpcore、街頭風、極簡風、復古風、波西米亞風、簡約風），並預估一個合理的二手市場價格（以新台幣 TWD 為單位，僅提供數字）。請僅用符合所提供 schema 的 JSON 物件進行回覆。",
+            text: "您是一位時尚專家AI。請分析這張衣物圖片。識別它的類別（例如：T恤、牛仔褲、連身裙、外套），主要顏色，並提供3-5個相關的風格標籤（例如：Y2K、Gorpcore、街頭風、極簡風、復古風、波西米亞風、簡約風），並預估一個合理的二手市場價格（以新台幣 TWD 為單位，僅提供數字）。請僅用符合所提供 schema 的 JSON 物件進行回覆。使用中文。",
         };
 
         const response = await ai.models.generateContent({
