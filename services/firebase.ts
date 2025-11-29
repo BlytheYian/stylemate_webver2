@@ -1,6 +1,6 @@
-
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth, User as FirebaseUser } from 'firebase/auth';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import type { FirebaseApp } from 'firebase/app';
+import { getAuth, Auth, User } from 'firebase/auth';
 import { getFirestore, Firestore, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
@@ -87,7 +87,7 @@ export const testFirestoreConnection = async (collectionName: string) => {
   }
 };
 
-export const ensureUserDocument = async (user: FirebaseUser) => {
+export const ensureUserDocument = async (user: User) => {
   if (!user) return null;
   const userRef = doc(db, 'users', user.uid);
   const userSnap = await getDoc(userRef);

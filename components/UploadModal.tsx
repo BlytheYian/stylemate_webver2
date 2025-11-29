@@ -2,9 +2,8 @@
 import React, { useState, useRef } from 'react';
 import { ClothingItem, User } from '../types';
 import { generateClothingTags, fileToBase64 } from '../services/geminiService';
-import { db, storage } from '../services/firebase';
-import { ref, uploadString, getDownloadURL } from 'firebase/storage';
-import { PhotoIcon, SparklesIcon, XMarkIcon, PlusIcon } from './Icons';
+// Removed storage imports as we are switching to base64 strings
+import { PhotoIcon, SparklesIcon, XMarkIcon, PlusIcon, PencilIcon } from './Icons';
 
 interface UploadModalProps {
   user: User;
@@ -14,12 +13,54 @@ interface UploadModalProps {
 
 type Step = 'upload' | 'analyzing' | 'edit' | 'uploading';
 
+// Helper function to compress image and return Base64 string directly
+const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.src = objectUrl;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 800; // Reduced to 800px to keep Base64 string size manageable
+            let width = img.width;
+            let height = img.height;
+
+            if (width > MAX_WIDTH) {
+                height = Math.round((height * MAX_WIDTH) / width);
+                width = MAX_WIDTH;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(img, 0, 0, width, height);
+                // Convert directly to Base64 string (Data URL)
+                // Quality 0.6 provides good balance between visual quality and string length
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                URL.revokeObjectURL(objectUrl);
+                resolve(dataUrl);
+            } else {
+                URL.revokeObjectURL(objectUrl);
+                reject(new Error("Canvas context is null"));
+            }
+        };
+        img.onerror = (err) => {
+            URL.revokeObjectURL(objectUrl);
+            reject(err);
+        };
+    });
+};
+
 const UploadModal: React.FC<UploadModalProps> = ({ user, onClose, onUpload }) => {
   const [step, setStep] = useState<Step>('upload');
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatusText, setUploadStatusText] = useState('準備處理...');
+  
   const [itemDetails, setItemDetails] = useState({
       category: '',
       color: '',
@@ -84,6 +125,15 @@ const UploadModal: React.FC<UploadModalProps> = ({ user, onClose, onUpload }) =>
     }
   };
 
+  const handleSkipAI = () => {
+    if (files.length === 0) {
+      setError("請先選擇一张圖片。");
+      return;
+    }
+    setError(null);
+    setStep('edit');
+  };
+
   const handleDetailsChange = (field: keyof typeof itemDetails, value: string | number) => {
     setItemDetails(prev => ({
         ...prev,
@@ -94,35 +144,57 @@ const UploadModal: React.FC<UploadModalProps> = ({ user, onClose, onUpload }) =>
   };
 
   const handleFinalUpload = async () => {
-    if (previews.length === 0 || !user) return;
+    if (files.length === 0 || !user) return;
     setStep('uploading');
     setIsUploading(true);
     setError(null);
+    setUploadProgress(10);
+    setUploadStatusText('正在優化圖片...');
+    
     try {
-        // 1. Upload images to Firebase Storage
-        const imageUrls: string[] = [];
-        for (const preview of previews) {
-            const imageRef = ref(storage, `items/${user.id}/${Date.now()}`);
-            const uploadResult = await uploadString(imageRef, preview, 'data_url');
-            const downloadURL = await getDownloadURL(uploadResult.ref);
-            imageUrls.push(downloadURL);
-        }
+        // Convert all images to Base64 strings in parallel
+        const processingPromises = files.map(async (file, index) => {
+            // Update status for user feedback
+            setUploadStatusText(`正在處理圖片 (${index + 1}/${files.length})...`);
+            
+            // Artificial small delay to let UI render the text update if it's too fast
+            await new Promise(resolve => setTimeout(resolve, 300));
 
-        // 2. Call onUpload with the Storage URLs
+            try {
+                 const base64String = await compressImage(file);
+                 return base64String;
+            } catch (err) {
+                 console.warn("Compression failed, using original reader", err);
+                 // Fallback to simple file reader if canvas fails
+                 return await fileToBase64(file).then(b64 => `data:${file.type};base64,${b64}`);
+            }
+        });
+
+        const imageUrls = await Promise.all(processingPromises);
+        
+        setUploadStatusText('儲存中...');
+        setUploadProgress(100);
+
+        // 3. Save to Firestore (via App.tsx callback)
         const newItem = {
-            imageUrls,
+            imageUrls, // Now these are long Base64 strings
             ...itemDetails,
             userId: user.id,
             userName: user.name,
             userAvatar: user.avatar,
         };
-        onUpload(newItem);
+        
+        // Brief delay to show 100%
+        setTimeout(() => {
+             onUpload(newItem);
+        }, 500);
+
     } catch (err) {
-        console.error("Upload failed:", err);
-        setError("上傳失敗，請重試。");
+        console.error("Processing failed:", err);
+        setError("圖片處理失敗，請重試。");
         setStep('edit');
     } finally {
-        setIsUploading(false);
+        // setIsUploading(false); // Don't set false immediately to prevent flash
     }
   };
 
@@ -130,14 +202,36 @@ const UploadModal: React.FC<UploadModalProps> = ({ user, onClose, onUpload }) =>
   const renderContent = () => {
     switch (step) {
       case 'analyzing':
-      case 'uploading':
         return (
           <div className="flex flex-col items-center justify-center h-80">
             <svg className="animate-spin h-10 w-10 text-pink-400 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <p className="text-lg">{step === 'analyzing' ? '正在獲取風格標籤...' : '正在上傳物品...'}</p>
+            <p className="text-lg">正在獲取風格標籤...</p>
+          </div>
+        );
+      case 'uploading':
+        return (
+          <div className="flex flex-col items-center justify-center h-80 px-8">
+            <div className="w-full relative pt-1">
+              <div className="flex mb-2 items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-pink-600 bg-pink-200">
+                    處理中
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-semibold inline-block text-pink-600">
+                    {Math.round(uploadProgress)}%
+                  </span>
+                </div>
+              </div>
+              <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-pink-900 border border-pink-500/30">
+                <div style={{ width: `${uploadProgress}%` }} className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-300 ease-out"></div>
+              </div>
+            </div>
+            <p className="text-gray-300 mt-2 text-sm animate-pulse">{uploadStatusText}</p>
           </div>
         );
       case 'edit':
@@ -170,7 +264,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ user, onClose, onUpload }) =>
               </div>
             </div>
             <button onClick={handleFinalUpload} disabled={isUploading} className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold py-3 px-4 rounded-full disabled:opacity-50">
-                {isUploading ? '上傳中...' : '新增至我的衣櫃'}
+                {isUploading ? '處理中...' : '新增至我的衣櫃'}
             </button>
           </div>
         );
@@ -201,6 +295,15 @@ const UploadModal: React.FC<UploadModalProps> = ({ user, onClose, onUpload }) =>
             >
               <SparklesIcon className="w-5 h-5 mr-2" />
               獲取風格標籤
+            </button>
+            
+            <button 
+              onClick={handleSkipAI}
+              disabled={files.length === 0}
+              className="w-full bg-transparent border border-gray-600 hover:bg-gray-700 text-gray-300 font-bold py-3 px-4 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              <PencilIcon className="w-5 h-5 mr-2" />
+              手動填寫資料
             </button>
           </div>
         );

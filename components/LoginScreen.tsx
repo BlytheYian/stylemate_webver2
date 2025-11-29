@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import * as FirebaseAuth from 'firebase/auth';
 import { auth, isFirebaseConfigured } from '../services/firebase';
 import { SparklesIcon, TheIconSmall } from './Icons';
 import FirebaseConfigScreen from './FirebaseConfigScreen';
@@ -52,12 +52,12 @@ const LoginScreen: React.FC = () => {
         try {
             setIsLoading(true);
             if (mode === 'register') {
-                const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+                const userCredential = await FirebaseAuth.createUserWithEmailAndPassword(auth, email.trim(), password);
                 if (name.trim()) {
-                    await updateProfile(userCredential.user, { displayName: name.trim() });
+                    await FirebaseAuth.updateProfile(userCredential.user, { displayName: name.trim() });
                 }
             } else {
-                await signInWithEmailAndPassword(auth, email.trim(), password);
+                await FirebaseAuth.signInWithEmailAndPassword(auth, email.trim(), password);
             }
         } catch (error: any) {
             console.error("Authentication failed:", error);

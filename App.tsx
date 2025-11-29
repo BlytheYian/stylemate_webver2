@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { onAuthStateChanged, signOut, User as FirebaseAuthUser } from 'firebase/auth';
+import * as FirebaseAuth from 'firebase/auth';
 import { auth, testFirestoreConnection, ensureUserDocument } from './services/firebase';
 import { getUserAppState, saveUserAppState, UserAppStatePayload, getUserProfile, saveUserProfile } from './services/userData';
 import { ClothingItem, Match, User, LikedItem, Request, Transaction, TransactionPartyDetails } from './types';
@@ -166,7 +166,7 @@ const App: React.FC = () => {
     if (newView !== 'transaction-details') setActiveTransaction(null);
   }, []);
 
-  const handleLogin = useCallback(async (firebaseUser: FirebaseAuthUser) => {
+  const handleLogin = useCallback(async (firebaseUser: FirebaseAuth.User) => {
     if (!firebaseUser) return;
     if (currentUser?.id === firebaseUser.uid) {
       setIsLoggedIn(true);
@@ -211,7 +211,7 @@ const App: React.FC = () => {
 
   // Auth Listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, user => {
+    const unsubscribe = FirebaseAuth.onAuthStateChanged(auth, user => {
       if (user) {
         handleLogin(user).finally(() => setAuthInitializing(false));
       } else {
@@ -375,7 +375,7 @@ const App: React.FC = () => {
   const confirmLogout = async () => {
       setShowLogoutModal(false);
       try {
-        await signOut(auth);
+        await FirebaseAuth.signOut(auth);
       } catch (error) {
         console.warn('[App] signOut error', error);
         resetAppState();

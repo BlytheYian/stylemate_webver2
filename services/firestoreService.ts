@@ -29,7 +29,8 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
   return null;
 };
 
-export const createUserProfile = async (firebaseUser: import('firebase/auth').User): Promise<User> => {
+// FIX: Changed type to any to avoid import error
+export const createUserProfile = async (firebaseUser: any): Promise<User> => {
   const userRef = getUserRef(firebaseUser.uid);
   const userSnap = await getDoc(userRef);
   
